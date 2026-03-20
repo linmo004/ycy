@@ -304,6 +304,7 @@ ${wbPrompt ? wbPrompt + '。' : ''}
 每行一条消息，格式严格为：
 名字：消息内容
 名字必须且只能是以下群成员名字之一：${memberNames}
+【重要】每条消息只说一句话，不超过15个字，像真实发消息一样短，一个意思一条消息，不要把多句话合并在一行！
 每行开头必须是成员名字，紧跟中文冒号，不能有空格，不能有其他前缀。
 每个成员说话风格必须严格符合各自人设，不能混淆。
 【严禁】以「${myName.value}」的名义发言，禁止替「${myName.value}」说话。
@@ -368,8 +369,18 @@ const lines = processedReply.split('\n').map(l => l.trim()).filter(l => l.length
             await nextTick(); scrollToBottom(); refreshIcons(); continue;
           }
 
-          allMessages.value.push({ id: Date.now() + i, role: 'char', content, type: msgType, senderName, memberId: member.id, quoteId: msgQuoteId, recalled: false, revealed: false });
-          await nextTick(); scrollToBottom(); refreshIcons();
+          // 按句子分割成多条短消息
+          const sentences = content.split(/(?<=[。！？~～…」』\n])|(?<=[!?])/).map(s => s.trim()).filter(s => s.length > 0);
+          if (sentences.length <= 1) {
+            allMessages.value.push({ id: Date.now() + i * 100, role: 'char', content, type: msgType, senderName, memberId: member.id, quoteId: msgQuoteId, recalled: false, revealed: false });
+            await nextTick(); scrollToBottom(); refreshIcons();
+          } else {
+            for (let j = 0; j < sentences.length; j++) {
+              if (j > 0) await new Promise(resolve => setTimeout(resolve, 300 + Math.random() * 300));
+              allMessages.value.push({ id: Date.now() + i * 100 + j, role: 'char', content: sentences[j], type: msgType, senderName, memberId: member.id, quoteId: j === 0 ? msgQuoteId : null, recalled: false, revealed: false });
+              await nextTick(); scrollToBottom(); refreshIcons();
+            }
+          }
         }
         addRoomLog(`API回复成功，共${lines.length}条`);
       } catch (e) {
