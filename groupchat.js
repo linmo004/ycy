@@ -527,7 +527,21 @@ const lines = processedReply.split('\n').map(l => l.trim()).filter(l => l.length
     const toggleRecallReveal = (msg) => { msg.revealed = !msg.revealed; };
     const deleteMsg = async (msg) => { const idx = allMessages.value.findIndex(m => m.id === msg.id); if (idx !== -1) allMessages.value.splice(idx, 1); bubbleMenuMsgId.value = null; await saveMessages(); };
     const editMsg = (msg) => { msg.editing = true; msg.editContent = msg.content; bubbleMenuMsgId.value = null; nextTick(() => refreshIcons()); };
-    const confirmEdit = async (msg) => { msg.content = msg.editContent; msg.editing = false; await saveMessages(); };
+    const confirmEdit = async (msg) => {
+  const newContent = msg.editContent.trim();
+  // 检测心声格式
+  const whisperMatch = newContent.match(/^【心声[：:](.+)】$/);
+  if (whisperMatch) {
+    msg.content = whisperMatch[1].trim();
+    msg.type = 'whisper';
+  } else {
+    msg.content = newContent;
+    // 如果原来是心声但现在不是了，改回normal
+    if (msg.type === 'whisper') msg.type = 'normal';
+  }
+  msg.editing = false;
+  await saveMessages();
+};
     const cancelEdit = (msg) => { msg.editing = false; };
     const startMultiSelect = (id) => { multiSelectMode.value = true; selectedMsgs.value = [id]; bubbleMenuMsgId.value = null; nextTick(() => refreshIcons()); };
     const toggleSelect = (id) => { const idx = selectedMsgs.value.indexOf(id); if (idx === -1) selectedMsgs.value.push(id); else selectedMsgs.value.splice(idx, 1); };
