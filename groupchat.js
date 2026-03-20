@@ -314,8 +314,10 @@ ${wbPrompt ? wbPrompt + '。' : ''}
       try {
         const res = await fetch(`${apiConfig.value.url.replace(/\/$/, '')}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiConfig.value.key}` }, body: JSON.stringify({ model: apiConfig.value.model, messages: [{ role: 'system', content: systemPrompt }, ...beforeHistorySummaries, ...historyMsgs] }) });
         const data = await res.json();
-        const reply = data.choices?.[0]?.message?.content || '';
-        const lines = reply.split('\n').map(l => l.trim()).filter(l => l);
+        const reply = data.choices?.[0]?.message?.content || '（无回复）';
+// 自动去除 AI 模仿的时间戳前缀，如 [22:15]、[22:15 ] 等
+let processedReply = reply.replace(/\[\d{1,2}:\d{2}[^\]]*\]\s*/g, '\n');
+const lines = processedReply.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         allMessages.value.splice(allMessages.value.indexOf(loadingMsg), 1);
 
         for (let i = 0; i < lines.length; i++) {
