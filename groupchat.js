@@ -268,7 +268,7 @@ createApp({
       if (activeBooks.length) addRoomLog(`世界书触发：${activeBooks.map(b => b.name).join('、')}`);
 
       const memberNames = members.value.map(m => m.name).join('、');
-      const membersDesc = members.value.map(m => `【${m.name}】${m.world ? '世界观：' + m.world + '。' : ''}${m.persona ? '人设：' + m.persona + '。' : ''}`).join('\n');
+      const membersDesc = members.value.map((m, idx) => `【成员${idx+1}】名字：${m.name}${m.world ? '，世界观：' + m.world : ''}${m.persona ? '，人设：' + m.persona : ''}。说话时必须以「${m.name}：」开头。`).join('\n');
 
       // 每个成员可用表情包
       const memberStickerDesc = members.value.map(m => {
@@ -280,7 +280,7 @@ createApp({
       const beforeHistorySummaries = summaries.value.filter(s => s.pos === 'before_history').map(s => ({ role: 'system', content: `【回忆摘要】${s.content}` }));
       const afterSystemSummaries = summaries.value.filter(s => s.pos === 'after_system').map(s => `【回忆摘要】${s.content}`).join('；');
 
-      const systemPrompt = `${wbJailbreak ? wbJailbreak + '。' : ''}${wbWorldview ? '补充世界观：' + wbWorldview + '。\n' : ''}${wbPersona ? '补充人设：' + wbPersona + '。\n' : ''}
+      const systemPrompt = `本群共有${members.value.length}名成员，名单：${memberNames}。每条消息必须明确标注发言者名字。${wbJailbreak ? wbJailbreak + '。' : ''}${wbWorldview ? '补充世界观：' + wbWorldview + '。\n' : ''}${wbPersona ? '补充人设：' + wbPersona + '。\n' : ''}
 【群成员信息】
 ${membersDesc}
 ${myPersona.value ? `【用户】${myName.value}的人设：${myPersona.value}` : ''}
@@ -301,8 +301,12 @@ ${wbPrompt ? wbPrompt + '。' : ''}
 【输出格式】
 每行一条消息，格式严格为：
 名字：消息内容
-名字必须是群成员名字之一：${memberNames}
+名字必须且只能是以下群成员名字之一：${memberNames}
+每行开头必须是成员名字，紧跟中文冒号，不能有空格，不能有其他前缀。
+每个成员说话风格必须严格符合各自人设，不能混淆。
 【严禁】以「${myName.value}」的名义发言，禁止替「${myName.value}」说话。
+【严禁】在名字前加任何前缀如"[22:15]"、">"、"-"、数字编号等。
+【严禁】同一行出现两个成员的名字或内容。
 【特殊格式】心声：名字【心声：内容】；撤回：名字【撤回】；引用：名字【引用：被引用原文】回复内容`;
 
       const readCount = parseInt(aiReadCountInput.value) || 20;
