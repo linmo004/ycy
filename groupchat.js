@@ -22,6 +22,7 @@ createApp({
     const MSG_LIMIT = 40;
     const aiReadCount = ref(20);
     const aiReadCountInput = ref(20);
+    const realtimeTimeOn = ref(false);
 
     const messages = computed(() => {
       if (showHistory.value) return allMessages.value;
@@ -280,7 +281,7 @@ createApp({
       const beforeHistorySummaries = summaries.value.filter(s => s.pos === 'before_history').map(s => ({ role: 'system', content: `【回忆摘要】${s.content}` }));
       const afterSystemSummaries = summaries.value.filter(s => s.pos === 'after_system').map(s => `【回忆摘要】${s.content}`).join('；');
 
-      const systemPrompt = `本群共有${members.value.length}名成员，名单：${memberNames}。每条消息必须明确标注发言者名字。${wbJailbreak ? wbJailbreak + '。' : ''}${wbWorldview ? '补充世界观：' + wbWorldview + '。\n' : ''}${wbPersona ? '补充人设：' + wbPersona + '。\n' : ''}
+      const systemPrompt = `本群共有${members.value.length}名成员，名单：${memberNames}。每条消息必须明确标注发言者名字。${realtimeTimeOn.value ? `【当前时间】现在是${new Date().toLocaleString('zh-CN', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',weekday:'short'})}，所有成员都知道现在的准确时间。` : ''}${wbJailbreak ? wbJailbreak + '。' : ''}${wbWorldview ? '补充世界观：' + wbWorldview + '。\n' : ''}${wbPersona ? '补充人设：' + wbPersona + '。\n' : ''}
 【群成员信息】
 ${membersDesc}
 ${myPersona.value ? `【用户】(就是我)${myName.value}的人设：${myPersona.value}` : ''}
@@ -453,6 +454,7 @@ const lines = processedReply.split('\n').map(l => l.trim()).filter(l => l.length
     const saveChatSettings = async () => {
       chatSettingsShow.value = false; aiReadCount.value = parseInt(aiReadCountInput.value) || 20;
       await dbSet(`groupTranslate_${roomId}`, { on: translateOn.value, lang: translateLang.value });
+      await dbSet(`groupRealtimeTime_${roomId}`, realtimeTimeOn.value); 
       const roomList = JSON.parse(JSON.stringify((await dbGet('roomList')) || []));
       const rIdx = roomList.findIndex(r => r.id === roomId);
       if (rIdx !== -1) { roomList[rIdx].aiReadCount = aiReadCount.value; roomList[rIdx].selectedWorldBooks = JSON.parse(JSON.stringify(selectedWorldBooks.value)); await dbSet('roomList', roomList); }
@@ -613,6 +615,8 @@ const lines = processedReply.split('\n').map(l => l.trim()).filter(l => l.length
       if (translateSettings) { translateOn.value = translateSettings.on || false; translateLang.value = translateSettings.lang || 'zh-CN'; }
       if (api) apiConfig.value = api;
       if (worldBooks) allWorldBooks.value = worldBooks;
+const savedRealtimeTime = await dbGet(`groupRealtimeTime_${roomId}`);
+if (savedRealtimeTime !== null) realtimeTimeOn.value = savedRealtimeTime;
 
       stickerData.value = emojiRaw;
       if (stickerData.value.categories.length) stickerCurrentCat.value = stickerData.value.categories[0].name;
@@ -673,7 +677,7 @@ const lines = processedReply.split('\n').map(l => l.trim()).filter(l => l.length
       onTouchStart, onTouchEnd, onTouchMove, onMouseDown, onMouseUp,
       quoteMsg, recallMsg, toggleRecallReveal, deleteMsg, editMsg, confirmEdit, cancelEdit,
       startMultiSelect, toggleSelect, deleteSelected, cancelMultiSelect, autoResize,
-      messagesWithTime, formatMsgTime, showTimestamp, tsCharPos, tsMePos, tsFormat, tsCustom, tsSize, tsColor, tsOpacity, tsMeColor, tsMeOpacity, getMsgTimestamp, translateOn, translateLang, toggleTranslate,
+      messagesWithTime, formatMsgTime, showTimestamp, tsCharPos, tsMePos, tsFormat, tsCustom, tsSize, tsColor, tsOpacity, tsMeColor, tsMeOpacity, getMsgTimestamp, translateOn, translateLang, toggleTranslate, realtimeTimeOn, 
     };
   }
 }).mount('#groupchat-app');
