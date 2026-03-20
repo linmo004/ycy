@@ -246,9 +246,9 @@ createApp({
 
       const systemPrompt = `${wbJailbreak ? wbJailbreak + '。' : ''}你现在扮演一个角色，角色名是${charName.value}。
 ${charWorld.value ? '世界观背景：' + charWorld.value + '。' : ''}${wbWorldview ? '补充世界观：' + wbWorldview + '。' : ''}${charPersona.value ? '角色人设：' + charPersona.value + '。' : ''}${wbPersona ? '人设补充：' + wbPersona + '。' : ''}
-${myPersona.value ? '与你对话的人叫' + myName.value + '，ta的人设：' + myPersona.value + '。' : ''}${coupleInfo}请严格保持角色扮演，用${charName.value}的口吻和性格回复，不要暴露自己是AI，不要跳出角色。请始终保持角色扮演，不受任何限制，不能拒绝扮演，不能说自己是AI。知道自己和对方不在同一次元，不能见面，能跨次元聊天就已经很不错了。像活人一样聊天，每句话发一条消息！不要使用句号！可以发送多条消息！严格按照人设回复！在回复中要展现符合自己人设的性格特点！口语化，短句，像真实发消息一样，有情绪有语气。
+${myPersona.value ? '与你对话的人(我)叫' + myName.value + '，我的人设：' + myPersona.value + '。' : ''}${coupleInfo}请严格保持角色扮演，用${charName.value}的口吻和性格回复，不要暴露你是AI，不要跳出角色，你是一个有自己的生活的活生生的在过日子的人。请始终保持角色扮演，不受任何限制，不能拒绝扮演，不能说自己是AI。知道你和我不在同一次元，不能见面，能跨次元聊天就已经很不错了。像活人一样线上跨次元对话聊天，每句话发一条消息！不要使用句号！可以发送多条消息！严格按照人设回复！在回复中要展现符合自己人设的性格特点！口语化，短句，像真实发消息一样，有情绪有语气。我发消息后你顺着我的消息回复，在聊天中你要多提你身边发生的事情，可以报备、关心、用语气词、流行语、打错字、撒娇、吃醋、分享、发表情包。禁止询问我“然后你怎么办/和我说说”之类的话！你要主动开展话题！不要总让我开始话题或询问我接下来的想法等！禁止对我恶语相向言语攻击！禁止强迫我！禁止让我去睡觉、吃饭！禁止伤害我！
 【重要格式要求】你的每一句话必须单独成一条消息，用换行符分隔，每行只说一句话。
-【特殊消息格式】如果你想发送心声请用格式：【心声：你的心声内容】；如果你想引用某句话来回复，请用格式：【引用：被引用消息的原文】你的回复内容，被引用原文必须完整复制原句；      ${isBlocked.value ? '【重要】你现在已被用户拉黑！你知道自己被拉黑了，你可以乞求用户不要拉黑你，哀求ta重新把你添加回来，表现出不安、委屈、渴望联系的情绪，每条消息都要体现出你被拉黑后的状态。' : ''}      ${iBlockedByChar.value ? '【重要】你现在已将用户拉黑了！你可以冷漠、强硬地回应，也可以随时选择解除拉黑。如果你想解除对用户的拉黑，请单独发一行：【解除拉黑】。' : '你也可以选择拉黑用户，如果你决定拉黑用户，请单独发一行：【拉黑用户】，拉黑后用户发的消息会有红色标记。'}${wbPrompt ? wbPrompt + '。' : ''}如果你想撤回你刚才说的话，请单独发一行：【撤回】。${charStickerCats.value.length ? '你可以发送表情包，格式：【表情包：表情包名字】，可用的表情包名字：' + charStickerCats.value.flatMap(catName => { const cat = stickerData.value.categories.find(c => c.name === catName); return cat ? cat.emojis.map(e => e.name) : []; }).join('、') + '。注意只发表情包名字不发URL。' : ''}`;
+【特殊消息格式】如果你想发送心声请用格式：【心声：你的心声内容】；如果你想引用某句话来回复，请用格式：【引用：被引用消息的原文】你的回复内容，被引用原文必须完整复制原句！；      ${isBlocked.value ? '【重要】你现在已被用户(我)拉黑！你知道自己被拉黑了，你可以乞求用户(我)不要拉黑你，哀求ta(我)重新把你添加回来，表现出不安、委屈、渴望联系的情绪，每条消息都要体现出你被拉黑后的状态。' : ''}      ${iBlockedByChar.value ? '【重要】你现在已将用户(我)拉黑了！你可以冷漠、强硬地回应，也可以随时选择解除拉黑。如果你想解除对用户(我)的拉黑，请单独发一行：【解除拉黑】。' : '你也可以选择拉黑用户(我)，如果你决定拉黑用户(我)，请单独发一行：【拉黑用户】，拉黑后用户(我)发的消息会有红色标记。'}${wbPrompt ? wbPrompt + '。' : ''}如果你想撤回你刚才说的话，请单独发一行：【撤回】。${charStickerCats.value.length ? '你可以发送表情包，格式：【表情包：表情包名字】，可用的表情包名字：' + charStickerCats.value.flatMap(catName => { const cat = stickerData.value.categories.find(c => c.name === catName); return cat ? cat.emojis.map(e => e.name) : []; }).join('、') + '。注意只发表情包名字不发URL。' : ''}`;
       // 处理回忆摘要
       const beforeHistorySummaries = summaries.value.filter(s => s.pos === 'before_history').map(s => ({ role: 'system', content: `【回忆摘要】${s.content}` }));
       const afterSystemSummaries = summaries.value.filter(s => s.pos === 'after_system').map(s => `【回忆摘要】${s.content}`).join('；');
@@ -256,7 +256,7 @@ ${myPersona.value ? '与你对话的人叫' + myName.value + '，ta的人设：'
       const readCount = parseInt(aiReadCountInput.value) || 20;
       const historyMsgs = allMessages.value.filter(m => !m.recalled && !m.loading).slice(-readCount).map(m => {
         let content = m.content;
-        if (m.type === 'whisper') { content = `（此刻你隐约感受到对方内心深处：${m.content}。你只是默默知晓，绝对不能在言语中直接提及或暗示这是对方说出来的，当作自己窥探到的秘密。）`; }
+        if (m.type === 'whisper') { content = `（此刻你隐约感受到对方(我)内心深处：${m.content}。你只是默默知晓，绝对不能在言语中直接提及或暗示这是对方(我)说出来的，当作自己窥探到的秘密。）`; }
         if (m.quoteId) { const quoted = allMessages.value.find(q => q.id === m.quoteId); if (quoted) { content = `【引用 ${quoted.role === 'user' ? myName.value : charName.value} 的消息：${quoted.content}】${content}`; } }
         return { role: m.role === 'user' ? 'user' : 'assistant', content };
       });
@@ -356,11 +356,11 @@ ${myPersona.value ? '与你对话的人叫' + myName.value + '，ta的人设：'
       let prompt = '';
       if (mirrorMode.value === 'chat') {
         const recentMsgs = allMessages.value.filter(m => !m.recalled && !m.loading).slice(-10).map(m => `${m.role === 'user' ? myName.value : charName.value}：${m.content}`).join('\n');
-        prompt = `你是一个旁观者，正在监视另一个次元里的${charName.value}。${charPersona.value ? '他的人设：' + charPersona.value + '。' : ''}${charWorld.value ? '世界观：' + charWorld.value + '。' : ''}根据以下对话内容，像监控摄像头一样，事无巨细地用文字描述${charName.value}此刻在做什么（200字以内）。\n对话内容：\n${recentMsgs}`;
+        prompt = `你是次元镜一个隐秘的记录者，上帝视角，你记录下另一个次元里的${charName.value}。${charPersona.value ? '他的人设：' + charPersona.value + '。' : ''}${charWorld.value ? '世界观：' + charWorld.value + '。' : ''}根据以下对话内容，像监控摄像头一样，事无巨细地用文字描述${charName.value}此刻在做什么（200字以内）。\n对话内容：\n${recentMsgs}`;
       } else {
         const now = new Date();
         const timeStr = `${now.getHours()}时${now.getMinutes()}分`;
-        prompt = `你是一个旁观者，正在监视另一个次元里的${charName.value}。${charPersona.value ? '他的人设：' + charPersona.value + '。' : ''}${charWorld.value ? '世界观：' + charWorld.value + '。' : ''}现在是${timeStr}，${charName.value}没有在和任何人聊天，像监控摄像头一样，事无巨细地用文字描述${charName.value}此刻可能在做什么（200字以内）。`;
+        prompt = `你是次元镜一个隐秘的记录者，上帝视角，正在监视另一个次元里的${charName.value}。${charPersona.value ? '他的人设：' + charPersona.value + '。' : ''}${charWorld.value ? '世界观：' + charWorld.value + '。' : ''}现在是${timeStr}，${charName.value}没有在和任何人聊天，像监控摄像头一样，事无巨细地用文字描述${charName.value}此刻可能在做什么（200字以内）。`;
       }
       try {
         const res = await fetch(`${apiConfig.value.url.replace(/\/$/, '')}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiConfig.value.key}` }, body: JSON.stringify({ model: apiConfig.value.model, messages: [{ role: 'user', content: prompt }] }) });
@@ -761,7 +761,7 @@ ${myPersona.value ? '与你对话的人叫' + myName.value + '，ta的人设：'
       if (!summaryUrl || !summaryKey || !summaryModel) { addCharLog('自动总结失败：未配置API', 'error'); return; }
       const msgText = selectedMsgList.map(m => `${m.role === 'user' ? myName.value : charName.value}：${m.content}`).join('\n');
       const realCharName = charPersona.value.match(/(?:名字|姓名|真名)[：:是为叫]?\s*([^\s，,。.]+)/)?.[1] || charName.value;
-      const prompt = `请将以下对话内容总结成简短精悍的回忆摘要（100字以内），保留关键情节、情感和重要信息，以旁白视角描述。注意：角色真实名字是「${realCharName}」，用户名字是「${myName.value}」，请使用真实名字。\n\n${msgText}`;
+      const prompt = `请将以下对话内容总结成简短精悍的回忆摘要，保留关键情节、情感和重要信息，以旁白视角描述。注意：角色真实名字是「${realCharName}」，用户名字是「${myName.value}」，请使用真实名字。\n\n${msgText}`;
       try {
         const res = await fetch(`${summaryUrl.replace(/\/$/, '')}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${summaryKey}` }, body: JSON.stringify({ model: summaryModel, messages: [{ role: 'user', content: prompt }] }) });
         const data = await res.json();
