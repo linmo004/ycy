@@ -2,6 +2,9 @@ const { createApp, ref, onMounted, nextTick, computed } = Vue;
 
 createApp({
   setup() {
+    const translateOn = ref(false);
+    const translateLang = ref('zh-CN');
+
     const params = new URLSearchParams(window.location.search);
     const roomId = parseInt(params.get('id'));
 
@@ -35,7 +38,7 @@ createApp({
     const beautyShow = ref(false);
     const emojiShow = ref(false);
     const summaryShow = ref(false);
-
+    const dissolveShow = ref(false);
     const myNameInput = ref('');
     const myPersonaInput = ref('');
     const selectedMember = ref(null);
@@ -142,8 +145,27 @@ createApp({
     };
 
     const saveBeauty = async () => {
-      await dbSet(`groupBeauty_${roomId}`, JSON.parse(JSON.stringify({ chatWallpaper: chatWallpaper.value, showMemberAvatars: showMemberAvatars.value, memberAvatars: memberAvatars.value, myAvatar: myAvatar.value, hideNames: hideNames.value, bubbleCustomOn: bubbleCustomOn.value, bubbleSize: bubbleSize.value, bubbleMaxWidth: bubbleMaxWidth.value, myBubbleColor: myBubbleColor.value, myBubbleTextColor: myBubbleTextColor.value, memberBubbleColors: memberBubbleColors.value, cssCustomOn: cssCustomOn.value, cssCustomInput: cssCustomInput.value, stickerSuggestOn: stickerSuggestOn.value })));
+      await dbSet(`groupBeauty_${roomId}`, JSON.parse(JSON.stringify({ chatWallpaper: chatWallpaper.value, showMemberAvatars: showMemberAvatars.value, memberAvatars: memberAvatars.value, myAvatar: myAvatar.value, hideNames: hideNames.value, bubbleCustomOn: bubbleCustomOn.value, bubbleSize: bubbleSize.value, bubbleMaxWidth: bubbleMaxWidth.value, myBubbleColor: myBubbleColor.value, myBubbleTextColor: myBubbleTextColor.value, memberBubbleColors: memberBubbleColors.value, cssCustomOn: cssCustomOn.value, cssCustomInput: cssCustomInput.value, stickerSuggestOn: stickerSuggestOn.value        , showTimestamp: showTimestamp.value, tsCharPos: tsCharPos.value, tsMePos: tsMePos.value, tsFormat: tsFormat.value, tsCustom: tsCustom.value, tsSize: tsSize.value, tsColor: tsColor.value, tsOpacity: tsOpacity.value, tsMeColor: tsMeColor.value, tsMeOpacity: tsMeOpacity.value })));
       applyBubbleStyle();
+    };
+    const showTimestamp = ref(false);
+    const tsCharPos = ref('bottom');
+    const tsMePos = ref('bottom');
+    const tsFormat = ref('time');
+    const tsCustom = ref('');
+    const tsSize = ref('10');
+    const tsColor = ref('rgba(0,0,0,0.3)');
+    const tsOpacity = ref('1');
+    const tsMeColor = ref('rgba(255,255,255,0.5)');
+    const tsMeOpacity = ref('1');
+
+    const getMsgTimestamp = (msg) => {
+      if (!showTimestamp.value) return '';
+      const ts = msg.timestamp || msg.id;
+      if (tsFormat.value === 'time') return formatMsgTime(ts);
+      if (tsFormat.value === 'read') return '已读';
+      if (tsFormat.value === 'custom') return tsCustom.value;
+      return '';
     };
 
     const loadBeauty = async () => {
@@ -157,6 +179,8 @@ createApp({
       memberBubbleColors.value = b.memberBubbleColors || {}; cssCustomOn.value = b.cssCustomOn || false;
       cssCustomInput.value = b.cssCustomInput || ''; stickerSuggestOn.value = b.stickerSuggestOn || false;
       applyWallpaperToDom(); applyBubbleStyle();
+      showTimestamp.value = b.showTimestamp || false; tsCharPos.value = b.tsCharPos || 'bottom'; tsMePos.value = b.tsMePos || 'bottom'; tsFormat.value = b.tsFormat || 'time'; tsCustom.value = b.tsCustom || ''; tsSize.value = b.tsSize || '10'; tsColor.value = b.tsColor || 'rgba(0,0,0,0.3)'; tsOpacity.value = b.tsOpacity || '1'; tsMeColor.value = b.tsMeColor || 'rgba(255,255,255,0.5)'; tsMeOpacity.value = b.tsMeOpacity || '1';
+
     };
 
     // 表情包
@@ -421,6 +445,7 @@ ${wbPrompt ? wbPrompt + '。' : ''}
     const openChatSettings = () => { toolbarOpen.value = false; aiReadCountInput.value = aiReadCount.value; chatSettingsShow.value = true; nextTick(() => refreshIcons()); };
     const saveChatSettings = async () => {
       chatSettingsShow.value = false; aiReadCount.value = parseInt(aiReadCountInput.value) || 20;
+      await dbSet(`groupTranslate_${roomId}`, { on: translateOn.value, lang: translateLang.value });
       const roomList = JSON.parse(JSON.stringify((await dbGet('roomList')) || []));
       const rIdx = roomList.findIndex(r => r.id === roomId);
       if (rIdx !== -1) { roomList[rIdx].aiReadCount = aiReadCount.value; roomList[rIdx].selectedWorldBooks = JSON.parse(JSON.stringify(selectedWorldBooks.value)); await dbSet('roomList', roomList); }
@@ -463,6 +488,12 @@ ${wbPrompt ? wbPrompt + '。' : ''}
       summaryShow.value = false;
       addRoomLog(`回忆已插入（位置：${summaryPos.value === 'before_history' ? '消息历史前' : '系统提示词后'}）`);
     };
+    const confirmDissolve = async () => {
+      const roomList = JSON.parse(JSON.stringify((await dbGet('roomList')) || []));
+      const idx = roomList.findIndex(r => r.id === roomId);
+      if (idx !== -1) { roomList.splice(idx, 1); await dbSet('roomList', roomList); }
+      window.location.href = 'chat.html';
+    };
 
     // 气泡操作
     const onTouchStart = (msg, i, e) => { touchMoved = false; longPressTimer = setTimeout(() => { if (!touchMoved) { bubbleMenuMsgId.value = bubbleMenuMsgId.value === msg.id ? null : msg.id; nextTick(() => refreshIcons()); } }, 500); };
@@ -485,6 +516,58 @@ ${wbPrompt ? wbPrompt + '。' : ''}
 
     const autoResize = () => { const el = inputRef.value; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; };
     const scrollToBottom = () => { if (msgArea.value) msgArea.value.scrollTop = msgArea.value.scrollHeight; };
+    const toggleTranslate = async (msg) => {
+      if (msg.translation && !msg.translationHidden) {
+        msg.translationHidden = true;
+        return;
+      }
+      if (msg.translation && msg.translationHidden) {
+        msg.translationHidden = false;
+        return;
+      }
+      msg.translating = true;
+      try {
+        const res = await fetch(
+          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(msg.content)}&langpair=autodetect|${translateLang.value}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.responseStatus === 200 && data.responseData?.translatedText) {
+            msg.translation = data.responseData.translatedText;
+            msg.translationHidden = false;
+          } else {
+            msg.translation = '翻译失败';
+            msg.translationHidden = false;
+          }
+        }
+      } catch (e) {
+        msg.translation = '翻译失败：' + e.message;
+        msg.translationHidden = false;
+      }
+      msg.translating = false;
+    };
+
+    const formatMsgTime = (ts) => {
+      if (!ts) return '';
+      const now = new Date(); const d = new Date(ts);
+      const diffDays = Math.floor((now - d) / 86400000);
+      const timeStr = `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`;
+      if (diffDays === 0 && now.getDate() === d.getDate()) return timeStr;
+      if (now.getDate() - d.getDate() === 1 && diffDays <= 1) return `昨天 ${timeStr}`;
+      if (d.getFullYear() === now.getFullYear()) return `${d.getMonth()+1}月${d.getDate()}日 ${timeStr}`;
+      return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${timeStr}`;
+    };
+
+    const messagesWithTime = computed(() => {
+      const result = []; let lastTs = 0;
+      const msgs = showHistory.value ? allMessages.value : allMessages.value.slice(-MSG_LIMIT);
+      for (const msg of msgs) {
+        const ts = msg.timestamp || msg.id;
+        if (ts - lastTs > 20 * 60 * 1000) result.push({ isTimeDivider: true, ts, id: `td_${ts}` });
+        result.push(msg); lastTs = ts;
+      }
+      return result;
+    });
 
     const saveMessages = async () => {
       const roomList = JSON.parse(JSON.stringify((await dbGet('roomList')) || []));
@@ -519,6 +602,8 @@ ${wbPrompt ? wbPrompt + '。' : ''}
       }
 
       if (mySettings) { myName.value = mySettings.name || '我'; myPersona.value = mySettings.persona || ''; }
+      const translateSettings = await dbGet(`groupTranslate_${roomId}`);
+      if (translateSettings) { translateOn.value = translateSettings.on || false; translateLang.value = translateSettings.lang || 'zh-CN'; }
       if (api) apiConfig.value = api;
       if (worldBooks) allWorldBooks.value = worldBooks;
 
@@ -577,9 +662,11 @@ ${wbPrompt ? wbPrompt + '。' : ''}
       openMySettings, saveMySettings, openChatSettings, saveChatSettings,
       openDimensionLink, openEmoji, openMyWhisper, openBeauty, openSummary,
       doSummary, applySummary,
+      dissolveShow, confirmDissolve,
       onTouchStart, onTouchEnd, onTouchMove, onMouseDown, onMouseUp,
       quoteMsg, recallMsg, toggleRecallReveal, deleteMsg, editMsg, confirmEdit, cancelEdit,
-      startMultiSelect, toggleSelect, deleteSelected, cancelMultiSelect, autoResize
+      startMultiSelect, toggleSelect, deleteSelected, cancelMultiSelect, autoResize,
+      messagesWithTime, formatMsgTime, showTimestamp, tsCharPos, tsMePos, tsFormat, tsCustom, tsSize, tsColor, tsOpacity, tsMeColor, tsMeOpacity, getMsgTimestamp, translateOn, translateLang, toggleTranslate,
     };
   }
 }).mount('#groupchat-app');

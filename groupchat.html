@@ -36,13 +36,14 @@
       <button class="history-load-btn" @click="showHistory=true">查看过往消息</button>
     </div>
     <div class="msg-list">
-      <div v-for="(msg, i) in messages" :key="msg.id">
-        <div v-if="msg.recalled" class="recall-tip" @click="toggleRecallReveal(msg)">
+      <div v-for="(msg, i) in messagesWithTime" :key="msg.id">
+        <div v-if="msg.isTimeDivider" class="time-divider"><span>{{ formatMsgTime(msg.ts) }}</span></div>
+        <div v-if="!msg.isTimeDivider && msg.recalled" class="recall-tip" @click="toggleRecallReveal(msg)">
           {{ msg.senderName || myName }} 撤回了一条消息
           <span class="recall-reveal-hint">{{ msg.revealed ? '收起' : '查看' }}</span>
         </div>
-        <div v-if="msg.recalled && msg.revealed" class="recall-revealed">{{ msg.content }}</div>
-        <div v-if="!msg.recalled" class="msg-row" :class="[msg.role==='user'?'row-right':'row-left', multiSelectMode?'selectable':'', selectedMsgs.includes(msg.id)?'selected-row':'']" @click="multiSelectMode?toggleSelect(msg.id):null" @touchstart="onTouchStart(msg,i,$event)" @touchend="onTouchEnd" @touchmove="onTouchMove" @mousedown="onMouseDown(msg,i)" @mouseup="onMouseUp">
+        <div v-if="!msg.isTimeDivider && msg.recalled && msg.revealed" class="recall-revealed">{{ msg.content }}</div>
+        <div v-if="!msg.isTimeDivider && !msg.recalled" class="msg-row" :class="[msg.role==='user'?'row-right':'row-left', multiSelectMode?'selectable':'', selectedMsgs.includes(msg.id)?'selected-row':'']" @click="multiSelectMode?toggleSelect(msg.id):null" @touchstart="onTouchStart(msg,i,$event)" @touchend="onTouchEnd" @touchmove="onTouchMove" @mousedown="onMouseDown(msg,i)" @mouseup="onMouseUp">
           <div class="select-check" v-if="multiSelectMode"><div class="check-circle" :class="{checked:selectedMsgs.includes(msg.id)}"></div></div>
           <div class="msg-wrap" :class="msg.role==='user'?'wrap-right':'wrap-left'">
             <div class="msg-sender" v-if="!hideNames">{{ msg.role==='user' ? myName : msg.senderName }}</div>
@@ -54,8 +55,11 @@
               <div class="chat-inline-avatar avatar-left" v-if="msg.role==='char' && showMemberAvatars" :style="getMemberAvatar(msg.memberId)">
                 <span v-if="!getMemberAvatarUrl(msg.memberId)">{{ msg.senderName?.[0] }}</span>
               </div>
+              <div class="msg-timestamp ts-me" v-if="showTimestamp && !msg.isTimeDivider && msg.role==='user' && getMsgTimestamp(msg)" :class="'ts-'+tsMePos" :style="`font-size:${tsSize}px;color:${tsMeColor};opacity:${tsMeOpacity};`">{{ getMsgTimestamp(msg) }}</div>
+
               <div v-if="msg.type==='sticker'" class="msg-sticker"><img :src="getStickerUrl(msg.content)" :alt="msg.content" /></div>
-              <div v-else class="msg-bubble" :class="[msg.role==='user'?'bubble-right':'bubble-left', msg.type==='whisper'?'bubble-whisper':'', msg.editing?'bubble-editing':'']" :style="getMemberBubbleStyle(msg)">
+              <div v-else class="msg-bubble" :class="[msg.role==='user'?'bubble-right':'bubble-left', msg.type==='whisper'?'bubble-whisper':'', msg.editing?'bubble-editing':'']" :style="getMemberBubbleStyle(msg)"
+                @click="translateOn && msg.role==='char' && !msg.loading && !msg.editing ? toggleTranslate(msg) : null">
                 <span v-if="msg.loading" class="msg-loading"><span></span><span></span><span></span></span>
                 <div v-else-if="msg.editing">
                   <textarea class="edit-textarea" v-model="msg.editContent" @keydown.enter.exact.prevent="confirmEdit(msg)"></textarea>
@@ -63,7 +67,14 @@
                 </div>
                 <span v-else>{{ msg.content }}</span>
                 <span v-if="msg.type==='whisper'" class="whisper-tag">心声</span>
+                <div v-if="msg.translating" class="msg-translation">
+                  <div class="msg-translation-loading"><span></span><span></span><span></span></div>
+                </div>
+                <div v-else-if="msg.translation && !msg.translationHidden" class="msg-translation" @click.stop="msg.translationHidden=true">
+                  {{ msg.translation }}
+                </div>
               </div>
+              <div class="msg-timestamp ts-right" v-if="showTimestamp && !msg.isTimeDivider && msg.role==='char' && getMsgTimestamp(msg)" :class="'ts-'+tsCharPos" :style="`font-size:${tsSize}px;color:${tsColor};opacity:${tsOpacity};`">{{ getMsgTimestamp(msg) }}</div>
               <div class="chat-inline-avatar avatar-right" v-if="msg.role==='user' && showMemberAvatars" :style="myAvatarStyle">
                 <span v-if="!myAvatar">{{ myName?.[0] }}</span>
               </div>
@@ -98,6 +109,7 @@
       <button class="toolbar-btn" @click="openBeauty"><i data-lucide="sparkles"></i><span>聊天美化</span></button>
       <button class="toolbar-btn" @click="openSummary"><i data-lucide="file-text"></i><span>聊天总结</span></button>
       <button class="toolbar-btn" @click="openEmoji"><i data-lucide="smile"></i><span>表情包</span></button>
+      <button class="toolbar-btn" @click="dissolveShow=true" style="color:#e53e3e;"><i data-lucide="trash-2"></i><span>解散</span></button>
       <button class="toolbar-btn" @click="goBack"><i data-lucide="arrow-left"></i><span>返回</span></button>
     </div>
   </transition>
@@ -151,6 +163,36 @@
             </div>
           </div>
           <div style="font-size:12px;color:#aaa;padding:8px 0;" v-else>世界书馆暂无世界书</div>
+        </div>
+        <div class="modal-item">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-size:13px;color:#555;font-weight:500;">点击气泡翻译</span>
+            <div class="toggle" :class="{on: translateOn}" @click="translateOn=!translateOn"></div>
+          </div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">开启后点击成员气泡自动翻译为所选语言</div>
+        </div>
+        <div class="modal-item" v-if="translateOn">
+          <label>翻译目标语言</label>
+          <select class="modal-input" v-model="translateLang" style="padding:10px 12px;">
+            <option value="zh-CN">中文（简体）</option>
+            <option value="zh-TW">中文（繁體）</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="es">Español</option>
+            <option value="pt">Português</option>
+            <option value="ru">Русский</option>
+            <option value="ar">العربية</option>
+            <option value="it">Italiano</option>
+            <option value="nl">Nederlands</option>
+            <option value="pl">Polski</option>
+            <option value="tr">Türkçe</option>
+            <option value="vi">Tiếng Việt</option>
+            <option value="th">ภาษาไทย</option>
+            <option value="id">Bahasa Indonesia</option>
+          </select>
         </div>
         <div class="modal-btns">
           <button class="modal-btn cancel" @click="chatSettingsShow=false">取消</button>
@@ -366,6 +408,67 @@
           </div>
         </div>
         <div class="beauty-section">
+          <div class="beauty-section-title">时间戳</div>
+          <div class="beauty-toggle-row">
+            <span>显示时间戳</span>
+            <div class="toggle" :class="{on: showTimestamp}" @click="showTimestamp=!showTimestamp; saveBeauty()"></div>
+          </div>
+          <div v-if="showTimestamp" class="bubble-custom-panel">
+            <div class="beauty-field">
+              <label>时间戳格式</label>
+              <div class="ts-format-row">
+                <div class="ts-format-btn" :class="{active: tsFormat==='time'}" @click="tsFormat='time'; saveBeauty()">时:分</div>
+                <div class="ts-format-btn" :class="{active: tsFormat==='read'}" @click="tsFormat='read'; saveBeauty()">已读</div>
+                <div class="ts-format-btn" :class="{active: tsFormat==='custom'}" @click="tsFormat='custom'; saveBeauty()">自定义</div>
+              </div>
+              <input v-if="tsFormat==='custom'" class="modal-input" v-model="tsCustom" @change="saveBeauty" placeholder="输入自定义时间戳文字..." style="margin-top:6px;" />
+            </div>
+            <div class="beauty-field">
+              <label>角色时间戳位置（气泡右侧）</label>
+              <div class="ts-format-row">
+                <div class="ts-format-btn" :class="{active: tsCharPos==='top'}" @click="tsCharPos='top'; saveBeauty()">上</div>
+                <div class="ts-format-btn" :class="{active: tsCharPos==='center'}" @click="tsCharPos='center'; saveBeauty()">中</div>
+                <div class="ts-format-btn" :class="{active: tsCharPos==='bottom'}" @click="tsCharPos='bottom'; saveBeauty()">下</div>
+              </div>
+            </div>
+            <div class="beauty-field">
+              <label>我的时间戳位置（气泡左侧）</label>
+              <div class="ts-format-row">
+                <div class="ts-format-btn" :class="{active: tsMePos==='top'}" @click="tsMePos='top'; saveBeauty()">上</div>
+                <div class="ts-format-btn" :class="{active: tsMePos==='center'}" @click="tsMePos='center'; saveBeauty()">中</div>
+                <div class="ts-format-btn" :class="{active: tsMePos==='bottom'}" @click="tsMePos='bottom'; saveBeauty()">下</div>
+              </div>
+            </div>
+            <div class="beauty-field">
+              <label>时间戳字体大小 (px)</label>
+              <input class="modal-input" type="number" v-model="tsSize" min="8" max="16" @change="saveBeauty" />
+            </div>
+            <div class="beauty-field">
+              <label>角色时间戳颜色</label>
+              <div class="color-row">
+                <input type="color" :value="tsColor.startsWith('rgba')?'#888888':tsColor" @change="e=>{tsColor=e.target.value; saveBeauty()}" />
+                <input class="modal-input" v-model="tsColor" @change="saveBeauty" placeholder="rgba(0,0,0,0.3)" style="flex:1;" />
+              </div>
+            </div>
+            <div class="beauty-field">
+              <label>角色时间戳透明度 (0-1)</label>
+              <input class="modal-input" type="number" v-model="tsOpacity" min="0" max="1" step="0.1" @change="saveBeauty" />
+            </div>
+            <div class="beauty-field">
+              <label>我的时间戳颜色</label>
+              <div class="color-row">
+                <input type="color" :value="tsMeColor.startsWith('rgba')?'#888888':tsMeColor" @change="e=>{tsMeColor=e.target.value; saveBeauty()}" />
+                <input class="modal-input" v-model="tsMeColor" @change="saveBeauty" placeholder="rgba(0,0,0,0.3)" style="flex:1;" />
+              </div>
+            </div>
+            <div class="beauty-field">
+              <label>我的时间戳透明度 (0-1)</label>
+              <input class="modal-input" type="number" v-model="tsMeOpacity" min="0" max="1" step="0.1" @change="saveBeauty" />
+            </div>
+          </div>
+        </div>
+
+        <div class="beauty-section">
           <div class="beauty-section-title">气泡样式</div>
           <div class="beauty-toggle-row">
             <span>自定义气泡</span>
@@ -533,6 +636,18 @@
         </div>
         <div class="peek-empty" v-else>暂无历史记录</div>
         <div class="modal-btns"><button class="modal-btn cancel" @click="mirrorHistoryShow=false">关闭</button></div>
+      </div>
+    </div>
+  </transition>
+  <transition name="modal">
+    <div class="modal-mask" v-if="dissolveShow && appReady" @click.self="dissolveShow=false">
+      <div class="modal-box" style="max-width:300px;">
+        <div class="modal-title">解散聊天室</div>
+        <div style="font-size:14px;color:#555;text-align:center;padding:8px 0;">确定要解散「{{ roomName }}」吗？<br/><span style="font-size:12px;color:#e53e3e;">所有聊天记录将被永久删除</span></div>
+        <div class="modal-btns">
+          <button class="modal-btn cancel" @click="dissolveShow=false">否，取消</button>
+          <button class="modal-btn" style="background:#e53e3e;color:#fff;" @click="confirmDissolve">是，解散</button>
+        </div>
       </div>
     </div>
   </transition>
