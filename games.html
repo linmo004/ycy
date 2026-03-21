@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>娱乐游戏</title>
+<script src="vue.global.js"></script>
+<script src="lucide.min.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body>
+<div id="games-app" v-cloak>
+  <div class="games-topbar">
+    <button class="games-back-btn" @click="goBack"><i data-lucide="arrow-left"></i></button>
+    <div class="games-title">娱乐游戏</div>
+  </div>
+
+  <div class="games-content">
+    <div class="games-section-title">休闲益智</div>
+    <div class="games-grid">
+      <div class="game-card" v-for="g in games" :key="g.id" @click="enterGame(g)">
+        <div class="game-card-icon">{{ g.icon }}</div>
+        <div class="game-card-name">{{ g.name }}</div>
+        <div class="game-card-desc">{{ g.desc }}</div>
+        <div class="game-card-badge" v-if="g.badge">{{ g.badge }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script src="games.js"></script>
+</body>
+</html>

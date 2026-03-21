@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>石头剪刀布</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body class="game-page">
+<div id="rps-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">✊ 石头剪刀布</div>
+  </div>
+  <div class="game-body">
+    <div class="game-score-bar">
+      <div class="game-score-item"><div class="game-score-num">{{ score.win }}</div><div class="game-score-label">胜</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ score.draw }}</div><div class="game-score-label">平</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ score.lose }}</div><div class="game-score-label">负</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ score.streak }}</div><div class="game-score-label">连胜</div></div>
+    </div>
+
+    <!-- 角色选择 -->
+    <div v-if="!selectedChar" style="background:#fff;border-radius:16px;padding:16px;margin-bottom:16px;">
+      <div style="font-size:13px;font-weight:700;color:#aaa;margin-bottom:10px;">选择对战角色（可跳过）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <div v-for="c in charList" :key="c.id" @click="selectedChar=c"
+          style="padding:6px 14px;border-radius:20px;border:1.5px solid #e5e5ea;font-size:13px;cursor:pointer;">
+          {{ c.name }}
+        </div>
+        <div @click="selectedChar={name:'随机对手',persona:''}"
+          style="padding:6px 14px;border-radius:20px;background:#111;color:#fff;font-size:13px;cursor:pointer;">
+          随机对手
+        </div>
+      </div>
+    </div>
+
+    <div v-if="selectedChar" style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:13px;color:#aaa;">对战对象</div>
+      <div style="font-size:16px;font-weight:700;color:#111;margin-top:4px;">{{ selectedChar.name }}</div>
+      <button @click="selectedChar=null" style="margin-top:6px;background:transparent;border:none;color:#aaa;font-size:12px;cursor:pointer;">更换</button>
+    </div>
+
+    <!-- 出拳区 -->
+    <div style="display:flex;gap:12px;justify-content:center;margin:24px 0;">
+      <button v-for="opt in options" :key="opt.id"
+        @click="play(opt)"
+        :disabled="loading"
+        style="width:80px;height:80px;border-radius:20px;border:2px solid #e5e5ea;background:#fff;font-size:36px;cursor:pointer;transition:transform 0.1s;"
+        :style="playerChoice?.id===opt.id?'border-color:#111;transform:scale(1.08);':''">
+        {{ opt.emoji }}
+      </button>
+    </div>
+
+    <div class="game-loading" v-if="loading"><span></span><span></span><span></span></div>
+
+    <!-- 结果 -->
+    <div v-if="result && !loading" class="game-result-box">
+      <div style="display:flex;justify-content:center;gap:24px;margin-bottom:16px;font-size:48px;">
+        <div>{{ playerChoice?.emoji }}</div>
+        <div style="font-size:24px;align-self:center;color:#aaa;">VS</div>
+        <div>{{ aiChoice?.emoji }}</div>
+      </div>
+      <div style="font-size:13px;color:#aaa;margin-bottom:4px;">{{ selectedChar?.name || 'AI' }} 出了 {{ aiChoice?.name }}</div>
+      <div class="game-result-title" :style="result==='win'?'color:#27ae60':result==='lose'?'color:#e53e3e':'color:#f59e0b'">
+        {{ result==='win'?'你赢了！':result==='lose'?'你输了...':'平局～' }}
+      </div>
+      <div v-if="aiComment" class="game-result-desc" style="margin-top:10px;font-style:italic;">「{{ aiComment }}」</div>
+      <div class="game-btn-row">
+        <button class="game-btn game-btn-primary" @click="reset">再来一局</button>
+      </div>
+    </div>
+
+    <!-- 排行榜 -->
+    <div style="margin-top:20px;">
+      <button class="game-history-btn" @click="showRank=!showRank">
+        🏆 历史最高连胜：{{ bestStreak }}
+      </button>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const options = [
+      { id: 'rock', name: '石头', emoji: '✊' },
+      { id: 'scissors', name: '剪刀', emoji: '✌️' },
+      { id: 'paper', name: '布', emoji: '🖐️' },
+    ];
+    const score = ref({ win: 0, draw: 0, lose: 0, streak: 0 });
+    const bestStreak = ref(0);
+    const charList = ref([]);
+    const selectedChar = ref(null);
+    const playerChoice = ref(null);
+    const aiChoice = ref(null);
+    const result = ref('');
+    const aiComment = ref('');
+    const loading = ref(false);
+    const showRank = ref(false);
+    const apiConfig = ref({});
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const judge = (p, a) => {
+      if (p === a) return 'draw';
+      if ((p==='rock'&&a==='scissors')||(p==='scissors'&&a==='paper')||(p==='paper'&&a==='rock')) return 'win';
+      return 'lose';
+    };
+
+    const play = async (opt) => {
+      if (loading.value) return;
+      playerChoice.value = opt;
+      aiChoice.value = null;
+      result.value = '';
+      aiComment.value = '';
+      loading.value = true;
+
+      const ai = options[Math.floor(Math.random() * 3)];
+      aiChoice.value = ai;
+      const r = judge(opt.id, ai.id);
+      result.value = r;
+
+      if (r === 'win') { score.value.win++; score.value.streak++; if (score.value.streak > bestStreak.value) bestStreak.value = score.value.streak; }
+      else if (r === 'lose') { score.value.lose++; score.value.streak = 0; }
+      else { score.value.draw++; }
+
+      await dbSet('rps_score', JSON.parse(JSON.stringify(score.value)));
+      await dbSet('rps_bestStreak', bestStreak.value);
+
+      // AI角色评论
+      if (selectedChar.value && apiConfig.value.url && apiConfig.value.key && apiConfig.value.model) {
+        try {
+          const resultText = r==='win'?'你出'+opt.name+'赢了我':'r'==='lose'?'你出'+opt.name+'输了':'平局';
+          const prompt = `你是${selectedChar.value.name}。${selectedChar.value.persona||''}我们刚才玩了石头剪刀布，我出了${ai.name}，对方出了${opt.name}，结果${r==='win'?'我输了':'r'==='lose'?'我赢了':'平局'}。用你的角色风格说一句话（20字以内，口语化，有情绪）。`;
+          const res = await fetch(`${apiConfig.value.url.replace(/\/$/,'')}/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer `${apiConfig.value.key}`},body:JSON.stringify({model:apiConfig.value.model,messages:[{role:'user',content:prompt}]})});
+          const data = await res.json();
+          aiComment.value = data.choices?.[0]?.message?.content || '';
+        } catch(e) {}
+      }
+      loading.value = false;
+    };
+
+    const reset = () => {
+      playerChoice.value = null;
+      aiChoice.value = null;
+      result.value = '';
+      aiComment.value = '';
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+      const api = await dbGet('apiConfig');
+      if (api) apiConfig.value = api;
+      const chars = await dbGet('charList') || [];
+      charList.value = chars;
+      const s = await dbGet('rps_score');
+      if (s) score.value = s;
+      const b = await dbGet('rps_bestStreak');
+      if (b) bestStreak.value = b;
+    });
+
+    return { options, score, bestStreak, charList, selectedChar, playerChoice, aiChoice, result, aiComment, loading, showRank, goBack, play, reset };
+  }
+}).mount('#rps-app');
+</script>
+</body>
+</html>

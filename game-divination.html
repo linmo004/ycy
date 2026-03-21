@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>次元占卜</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body class="game-page">
+<div id="divination-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">🔮 次元占卜</div>
+  </div>
+  <div class="game-body">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="font-size:56px;margin-bottom:8px;">🔮</div>
+      <div style="font-size:14px;color:#888;line-height:1.6;">输入你的问题<br/>跨次元的神秘力量将为你指引</div>
+    </div>
+
+    <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:16px;">
+      <textarea v-model="question" placeholder="你想占卜什么？例如：今天的运势如何？他喜欢我吗？..."
+        style="width:100%;border:none;outline:none;font-size:14px;resize:none;min-height:80px;font-family:inherit;color:#111;background:transparent;"
+        @keydown.enter.ctrl="divine"></textarea>
+    </div>
+
+    <!-- 角色选择 -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;color:#aaa;margin-bottom:8px;">选择占卜者（可选）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <div @click="selectedChar=null"
+          :style="!selectedChar?'background:#111;color:#fff;':'background:#f2f2f7;color:#555;'"
+          style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;">神秘占卜师</div>
+        <div v-for="c in charList" :key="c.id" @click="selectedChar=c"
+          :style="selectedChar?.id===c.id?'background:#111;color:#fff;':'background:#f2f2f7;color:#555;'"
+          style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;">{{ c.name }}</div>
+      </div>
+    </div>
+
+    <button class="game-btn game-btn-primary" @click="divine" :disabled="loading || !question.trim()" style="width:100%;margin-bottom:20px;">
+      {{ loading ? '占卜中...' : '🔮 开始占卜' }}
+    </button>
+
+    <div class="game-loading" v-if="loading"><span></span><span></span><span></span></div>
+
+    <div v-if="result && !loading" style="background:#fff;border-radius:20px;padding:24px;box-shadow:0 2px 16px rgba(0,0,0,0.10);">
+      <div style="font-size:12px;font-weight:700;color:#aaa;margin-bottom:8px;letter-spacing:0.5px;">你的问题</div>
+      <div style="font-size:14px;color:#555;margin-bottom:16px;padding:10px 12px;background:#f9f9f9;border-radius:10px;">{{ question }}</div>
+      <div style="font-size:12px;font-weight:700;color:#aaa;margin-bottom:8px;letter-spacing:0.5px;">🔮 占卜结果</div>
+      <div style="font-size:15px;color:#333;line-height:1.9;white-space:pre-wrap;">{{ result }}</div>
+      <div class="game-btn-row">
+        <button class="game-btn game-btn-primary" @click="result='';question=''">再占一次</button>
+      </div>
+    </div>
+
+    <!-- 历史记录 -->
+    <div v-if="history.length" style="margin-top:20px;">
+      <button class="game-history-btn" @click="showHistory=!showHistory">
+        📜 占卜记录（{{ history.length }}）
+      </button>
+      <div v-if="showHistory" class="game-history-list">
+        <div v-for="(h,i) in history.slice().reverse()" :key="i" class="game-history-item" style="flex-direction:column;align-items:flex-start;gap:4px;">
+          <div style="font-size:12px;color:#aaa;">{{ h.time }}</div>
+          <div style="font-size:13px;font-weight:600;color:#555;">{{ h.question }}</div>
+          <div style="font-size:12px;color:#888;line-height:1.5;">{{ h.result.slice(0,60) }}{{ h.result.length>60?'...':'' }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const question = ref('');
+    const result = ref('');
+    const loading = ref(false);
+    const history = ref([]);
+    const showHistory = ref(false);
+    const charList = ref([]);
+    const selectedChar = ref(null);
+    const apiConfig = ref({});
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const divine = async () => {
+      if (!question.value.trim() || loading.value) return;
+      if (!apiConfig.value.url || !apiConfig.value.key || !apiConfig.value.model) {
+        alert('请先在设置里配置API'); return;
+      }
+      loading.value = true;
+      result.value = '';
+      try {
+        const charDesc = selectedChar.value ? `你现在扮演角色「${selectedChar.value.name}」，${selectedChar.value.persona||''}，以角色的神秘口吻进行占卜。` : '你是一位跨越次元的神秘占卜师，语气神秘而深邃。';
+        const prompt = `${charDesc}
+用户的占卜问题是：「${question.value}」
+请给出一段次元风格的占卜结果（150字以内），要有神秘感、有画面感，可以引用星象、次元之力、命运丝线等意象，最后给出一句简短的指引。不要太直白，要有意境。`;
+        const res = await fetch(`${apiConfig.value.url.replace(/\/$/,'')}/chat/completions`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiConfig.value.key}`},
+          body:JSON.stringify({model:apiConfig.value.model,messages:[{role:'user',content:prompt}]})
+        });
+        const data = await res.json();
+        result.value = data.choices?.[0]?.message?.content || '占卜失败，请重试';
+        history.value.unshift({ question: question.value, result: result.value, time: new Date().toLocaleString() });
+        if (history.value.length > 20) history.value.splice(20);
+        await dbSet('divination_history', JSON.parse(JSON.stringify(history.value)));
+      } catch(e) {
+        result.value = '占卜失败：' + e.message;
+      }
+      loading.value = false;
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+      const api = await dbGet('apiConfig');
+      if (api) apiConfig.value = api;
+      const chars = await dbGet('charList') || [];
+      charList.value = chars;
+      const h = await dbGet('divination_history');
+      if (h) history.value = h;
+    });
+
+    return { question, result, loading, history, showHistory, charList, selectedChar, goBack, divine };
+  }
+}).mount('#divination-app');
+</script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>测试大全</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body class="game-page">
+<div id="test-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">📋 测试大全</div>
+  </div>
+  <div class="game-body">
+
+    <!-- 测试选择 -->
+    <div v-if="!currentTest && !loading">
+      <div style="font-size:13px;color:#aaa;margin-bottom:12px;font-weight:700;letter-spacing:0.5px;">选择测试类型</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+        <div v-for="t in testTypes" :key="t.id" @click="selectTest(t)"
+          style="background:#fff;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
+          <div style="font-size:28px;width:44px;text-align:center;">{{ t.icon }}</div>
+          <div style="flex:1;">
+            <div style="font-size:14px;font-weight:700;color:#111;margin-bottom:2px;">{{ t.name }}</div>
+            <div style="font-size:12px;color:#aaa;">{{ t.desc }}</div>
+          </div>
+          <div style="font-size:18px;color:#ccc;">›</div>
+        </div>
+      </div>
+
+      <!-- 自定义测试 -->
+      <div style="background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 6px rgba(0,0,0,0.06);">
+        <div style="font-size:13px;font-weight:700;color:#aaa;margin-bottom:10px;">✍️ 自定义测试</div>
+        <input v-model="customTestName" placeholder="输入测试名称，如：你是什么颜色的人..." 
+          style="width:100%;border:1.5px solid #e5e5ea;border-radius:10px;padding:10px 12px;font-size:14px;outline:none;margin-bottom:10px;" />
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div style="flex:1;">
+            <div style="font-size:12px;color:#aaa;margin-bottom:4px;">破限提示词（可选，用于敏感测试）</div>
+            <select v-model="selectedWorldBook" style="width:100%;border:1.5px solid #e5e5ea;border-radius:8px;padding:6px 10px;font-size:12px;outline:none;">
+              <option value="">不使用</option>
+              <option v-for="wb in worldBooks" :key="wb.id" :value="wb.id">{{ wb.name }}</option>
+            </select>
+          </div>
+          <button class="game-btn game-btn-primary" @click="startCustomTest" :disabled="!customTestName.trim()" style="padding:10px 20px;white-space:nowrap;">开始</button>
+        </div>
+      </div>
+
+      <!-- 历史记录 -->
+      <div v-if="history.length" style="margin-top:16px;">
+        <button class="game-history-btn" @click="showHistory=!showHistory">📊 测试历史（{{ history.length }}）</button>
+        <div v-if="showHistory" class="game-history-list">
+          <div v-for="(h,i) in history.slice().reverse()" :key="i" class="game-history-item" style="flex-direction:column;align-items:flex-start;gap:3px;">
+            <div style="font-size:13px;font-weight:700;color:#333;">{{ h.testName }}</div>
+            <div style="font-size:12px;color:#888;">{{ h.result.slice(0,40) }}{{ h.result.length>40?'...':'' }}</div>
+            <div style="font-size:11px;color:#ccc;">{{ h.time }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-loading" v-if="loading"><span></span><span></span><span></span></div>
+
+    <!-- 答题中 -->
+    <div v-if="currentTest && phase==='questions' && !loading">
+      <div style="background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">
+        <div style="font-size:22px;">{{ currentTest.icon }}</div>
+        <div>
+          <div style="font-size:14px;font-weight:700;color:#111;">{{ currentTest.name }}</div>
+          <div style="font-size:12px;color:#aaa;">第 {{ currentQIndex+1 }}/{{ questions.length }} 题</div>
+        </div>
+      </div>
+
+      <div style="background:#fff;border-radius:16px;padding:20px;margin-bottom:16px;">
+        <div style="font-size:15px;color:#333;line-height:1.7;margin-bottom:16px;">{{ questions[currentQIndex]?.q }}</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button v-for="(opt,oi) in questions[currentQIndex]?.options" :key="oi"
+            @click="selectAnswer(oi)"
+            style="padding:12px 14px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;font-size:14px;text-align:left;cursor:pointer;transition:all 0.15s;">
+            {{ opt }}
+          </button>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:center;">
+        <div style="display:flex;gap:4px;">
+          <div v-for="(q,qi) in questions" :key="qi"
+            style="width:8px;height:8px;border-radius:50%;"
+            :style="qi<currentQIndex?'background:#111;':qi===currentQIndex?'background:#555;':'background:#ddd;'"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 结果 -->
+    <div v-if="phase==='result' && testResult && !loading" style="background:#fff;border-radius:20px;padding:28px 20px;box-shadow:0 2px 16px rgba(0,0,0,0.10);">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:48px;margin-bottom:8px;">{{ currentTest?.icon }}</div>
+        <div style="font-size:18px;font-weight:800;color:#111;margin-bottom:4px;">{{ currentTest?.name }}</div>
+      </div>
+      <div style="font-size:15px;color:#333;line-height:1.9;white-space:pre-wrap;">{{ testResult }}</div>
+
+      <!-- 角色互动 -->
+      <div v-if="charList.length" style="margin-top:20px;padding-top:16px;border-top:1px solid #f0f0f0;">
+        <div style="font-size:13px;color:#aaa;margin-bottom:10px;">💬 看看角色怎么说</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+          <div v-for="c in charList" :key="c.id" @click="askChar(c)"
+            style="padding:6px 14px;border-radius:20px;border:1.5px solid #e5e5ea;font-size:13px;cursor:pointer;">
+            {{ c.name }}
+          </div>
+        </div>
+        <div v-if="charComment" style="background:#f9f9f9;border-radius:12px;padding:12px 14px;font-size:14px;color:#333;line-height:1.6;font-style:italic;">
+          「{{ charComment }}」
+        </div>
+        <div v-if="charCommentLoading" class="game-loading" style="padding:10px 0;"><span></span><span></span><span></span></div>
+      </div>
+
+      <div class="game-btn-row">
+        <button class="game-btn game-btn-primary" @click="resetTest">再测一次</button>
+        <button class="game-btn game-btn-secondary" @click="phase='';currentTest=null">换个测试</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const TEST_TYPES = [
+      { id: 'mbti', name: 'MBTI人格测试', icon: '🧠', desc: '16种人格类型，了解真实的自己', prompt: '生成一套MBTI人格测试题（10题），每题4个选项，最终根据答案判断MBTI类型并给出详细解读。' },
+      { id: 'compatibility', name: '相性测试', icon: '💕', desc: '测测你和另一半的契合度', prompt: '生成一套恋爱相性测试（10题），测试性格、价值观、生活习惯的匹配度，最终给出相性分析。' },
+      { id: 'mental', name: '心理健康测试', icon: '🌱', desc: '评估当前的心理健康状态', prompt: '生成一套心理健康自测（10题），评估压力、焦虑、情绪状态，给出健康建议。注意：仅供娱乐参考，不作为医学依据。' },
+      { id: 'love_iq', name: '恋爱脑测试', icon: '💝', desc: '你有多少恋爱脑？', prompt: '生成一套恋爱脑程度测试（10题），测测你在恋爱中的理性与感性程度，给出有趣的结果。' },
+      { id: 'possessive', name: '恋爱占有欲测试', icon: '🔒', desc: '你的占有欲有多强？', prompt: '生成一套恋爱占有欲测试（10题），从多个角度评估占有欲程度，给出分析和建议。' },
+      { id: 'animal', name: '动物原型测试', icon: '🦋', desc: '你的内心是什么动物？', prompt: '生成一套动物原型心理测试（10题），根据选择匹配最符合的动物原型，解读性格特质。' },
+      { id: 'talent', name: '天赋测试', icon: '✨', desc: '发现你隐藏的天赋', prompt: '生成一套天赋探索测试（10题），从多个维度发现潜在天赋和优势，给出发展建议。' },
+      { id: 'repression', name: '性压抑测试', icon: '🌶️', desc: '你的压抑指数有多高？', prompt: '生成一套性压抑程度心理测试（10题），用隐晦而幽默的方式测试，结果要有趣不要低俗。' },
+      { id: 'dimension', name: '次元属性测试', icon: '🌌', desc: '你在次元世界的属性是什么？', prompt: '生成一套次元属性测试（10题），测出你是光明/黑暗/中立等次元属性，以及对应的次元种族，给出有代入感的结果。' },
+    ];
+
+    const testTypes = ref(TEST_TYPES);
+    const currentTest = ref(null);
+    const phase = ref('');
+    const questions = ref([]);
+    const currentQIndex = ref(0);
+    const answers = ref([]);
+    const testResult = ref('');
+    const loading = ref(false);
+    const history = ref([]);
+    const showHistory = ref(false);
+    const customTestName = ref('');
+    const selectedWorldBook = ref('');
+    const worldBooks = ref([]);
+    const charList = ref([]);
+    const charComment = ref('');
+    const charCommentLoading = ref(false);
+    const apiConfig = ref({});
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const getWorldBookContent = () => {
+      if (!selectedWorldBook.value) return '';
+      const wb = worldBooks.value.find(w => w.id === selectedWorldBook.value);
+      return wb ? wb.content + '。' : '';
+    };
+
+    const selectTest = (t) => { startCustomTest(t); };
+
+    const startCustomTest = (t) => {
+      const testObj = t || { id: 'custom', name: customTestName.value.trim(), icon: '✍️', prompt: `生成一套关于"${customTestName.value.trim()}"的心理测试（10题），每题4个选项，最后给出有趣详细的结果分析。` };
+      if (!testObj.name) return;
+      doStartTest(testObj);
+    };
+
+    const doStartTest = async (t) => {
+      if (!apiConfig.value.url || !apiConfig.value.key || !apiConfig.value.model) {
+        alert('请先在设置里配置API'); return;
+      }
+      currentTest.value = t;
+      loading.value = true;
+      questions.value = [];
+      answers.value = [];
+      currentQIndex.value = 0;
+      testResult.value = '';
+      charComment.value = '';
+      phase.value = '';
+
+      try {
+        const wbContent = getWorldBookContent();
+        const prompt = `${wbContent}${t.prompt}
+请返回JSON格式：
+{"questions":[{"q":"题目","options":["A选项","B选项","C选项","D选项"]},...]}
+只返回JSON，不要其他文字，确保10道题。`;
+        const res = await fetch(`${apiConfig.value.url.replace(/\/$/,'')}/chat/completions`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiConfig.value.key}`},
+          body:JSON.stringify({model:apiConfig.value.model,messages:[{role:'user',content:prompt}]})
+        });
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content || '{}';
+        const match = text.match(/\{[\s\S]*\}/);
+        const parsed = match ? JSON.parse(match[0]) : {};
+        questions.value = parsed.questions || [];
+        if (questions.value.length > 0) {
+          phase.value = 'questions';
+        } else {
+          alert('题目生成失败，请重试');
+          currentTest.value = null;
+        }
+      } catch(e) {
+        alert('生成失败：' + e.message);
+        currentTest.value = null;
+      }
+      loading.value = false;
+    };
+
+    const selectAnswer = async (optionIndex) => {
+      answers.value.push(optionIndex);
+      if (currentQIndex.value < questions.value.length - 1) {
+        currentQIndex.value++;
+      } else {
+        // 所有题目回答完，生成结果
+        loading.value = true;
+        phase.value = '';
+        try {
+          const wbContent = getWorldBookContent();
+          const answerSummary = questions.value.map((q, i) => `第${i+1}题：${q.q} → 选择了：${q.options[answers.value[i]]}`).join('\n');
+          const prompt = `${wbContent}用户完成了"${currentTest.value.name}"测试，以下是题目和选择：
+${answerSummary}
+请根据这些答案，给出详细有趣的测试结果分析（200-300字），要有个性，结合具体答案分析，不要太笼统。`;
+          const res = await fetch(`${apiConfig.value.url.replace(/\/$/,'')}/chat/completions`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiConfig.value.key}`},
+            body:JSON.stringify({model:apiConfig.value.model,messages:[{role:'user',content:prompt}]})
+          });
+          const data = await res.json();
+          testResult.value = data.choices?.[0]?.message?.content || '结果生成失败';
+          phase.value = 'result';
+          history.value.unshift({ testName: currentTest.value.name, result: testResult.value, time: new Date().toLocaleString() });
+          if (history.value.length > 20) history.value.splice(20);
+          await dbSet('test_history', JSON.parse(JSON.stringify(history.value)));
+        } catch(e) {
+          testResult.value = '结果生成失败：' + e.message;
+          phase.value = 'result';
+        }
+        loading.value = false;
+      }
+    };
+
+    const askChar = async (char) => {
+      if (!apiConfig.value.url || !apiConfig.value.key || !apiConfig.value.model) return;
+      charCommentLoading.value = true;
+      charComment.value = '';
+      try {
+        const prompt = `你是${char.name}。${char.persona||''}我刚做了一个"${currentTest.value.name}"测试，结果是：${testResult.value.slice(0,200)}。用你的角色风格评价一下（30字以内，口语化，有角色特色）。`;
+        const res = await fetch(`${apiConfig.value.url.replace(/\/$/,'')}/chat/completions`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiConfig.value.key}`},
+          body:JSON.stringify({model:apiConfig.value.model,messages:[{role:'user',content:prompt}]})
+        });
+        const data = await res.json();
+        charComment.value = data.choices?.[0]?.message?.content || '';
+      } catch(e) {}
+      charCommentLoading.value = false;
+    };
+
+    const resetTest = () => {
+      questions.value = [];
+      answers.value = [];
+      currentQIndex.value = 0;
+      testResult.value = '';
+      charComment.value = '';
+      phase.value = '';
+      doStartTest(currentTest.value);
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+      const api = await dbGet('apiConfig');
+      if (api) apiConfig.value = api;
+      const chars = await dbGet('charList') || [];
+      charList.value = chars;
+      const wbs = await dbGet('worldBooks') || [];
+      worldBooks.value = wbs.filter(w => w.type === 'jailbreak' || w.type === 'prompt');
+      const h = await dbGet('test_history');
+      if (h) history.value = h;
+    });
+
+    return { testTypes, currentTest, phase, questions, currentQIndex, answers, testResult, loading, history, showHistory, customTestName, selectedWorldBook, worldBooks, charList, charComment, charCommentLoading, goBack, selectTest, startCustomTest, selectAnswer, askChar, resetTest };
+  }
+}).mount('#test-app');
+</script>
+</body>
+</html>

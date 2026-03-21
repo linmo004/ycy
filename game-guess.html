@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>猜数字</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body class="game-page">
+<div id="guess-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">🔢 猜数字</div>
+  </div>
+  <div class="game-body">
+    <div class="game-score-bar">
+      <div class="game-score-item"><div class="game-score-num">{{ tries }}</div><div class="game-score-label">已猜次数</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ bestRecord || '-' }}</div><div class="game-score-label">最少用次</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ range }}</div><div class="game-score-label">范围</div></div>
+    </div>
+
+    <div v-if="!started" style="text-align:center;padding:20px 0;">
+      <div style="font-size:40px;margin-bottom:16px;">🎯</div>
+      <div style="font-size:15px;color:#666;margin-bottom:20px;">我想了一个 1 到 {{ range }} 之间的数字，你能猜到吗？</div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-bottom:20px;">
+        <button v-for="r in [100,500,1000]" :key="r" @click="range=r"
+          :style="range===r?'background:#111;color:#fff;':'background:#f2f2f7;color:#333;'"
+          style="padding:8px 18px;border-radius:20px;border:none;font-size:13px;cursor:pointer;">
+          1-{{ r }}
+        </button>
+      </div>
+      <button class="game-btn game-btn-primary" @click="startGame">开始游戏</button>
+    </div>
+
+    <div v-else-if="!won">
+      <div style="background:#fff;border-radius:16px;padding:20px;margin-bottom:16px;text-align:center;">
+        <div style="font-size:13px;color:#aaa;margin-bottom:8px;">猜一个 1 到 {{ range }} 之间的数字</div>
+        <div v-if="hint" :style="hint.includes('大')?'color:#e53e3e':'color:#27ae60'" style="font-size:15px;font-weight:700;margin-bottom:12px;">{{ hint }}</div>
+        <div style="display:flex;gap:8px;align-items:center;justify-content:center;">
+          <input v-model.number="inputVal" type="number" :min="1" :max="range"
+            @keydown.enter="submitGuess"
+            style="width:120px;padding:10px;border:1.5px solid #e5e5ea;border-radius:10px;font-size:18px;text-align:center;outline:none;" />
+          <button class="game-btn game-btn-primary" @click="submitGuess">猜！</button>
+        </div>
+      </div>
+
+      <div style="background:#fff;border-radius:16px;padding:16px;max-height:200px;overflow-y:auto;">
+        <div style="font-size:12px;color:#aaa;margin-bottom:8px;">猜测记录</div>
+        <div v-for="(g,i) in guesses.slice().reverse()" :key="i"
+          style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+          <span style="color:#333;">{{ g.val }}</span>
+          <span :style="g.hint.includes('大')?'color:#e53e3e':'color:#27ae60'">{{ g.hint }}</span>
+        </div>
+        <div v-if="!guesses.length" style="text-align:center;color:#ccc;font-size:13px;padding:10px 0;">还没有猜测记录</div>
+      </div>
+    </div>
+
+    <div v-else class="game-result-box">
+      <div class="game-result-emoji">🎉</div>
+      <div class="game-result-title">猜对了！</div>
+      <div class="game-result-desc">答案是 <strong>{{ answer }}</strong>，你用了 {{ tries }} 次猜到了！</div>
+      <div v-if="isNewRecord" style="margin-top:8px;color:#f59e0b;font-weight:700;">🏆 新纪录！</div>
+      <div class="game-btn-row">
+        <button class="game-btn game-btn-primary" @click="startGame">再玩一局</button>
+        <button class="game-btn game-btn-secondary" @click="started=false">换难度</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const range = ref(100);
+    const started = ref(false);
+    const won = ref(false);
+    const answer = ref(0);
+    const tries = ref(0);
+    const inputVal = ref('');
+    const hint = ref('');
+    const guesses = ref([]);
+    const bestRecord = ref(null);
+    const isNewRecord = ref(false);
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const startGame = () => {
+      answer.value = Math.floor(Math.random() * range.value) + 1;
+      tries.value = 0;
+      hint.value = '';
+      guesses.value = [];
+      inputVal.value = '';
+      won.value = false;
+      started.value = true;
+      isNewRecord.value = false;
+    };
+
+    const submitGuess = async () => {
+      const v = parseInt(inputVal.value);
+      if (!v || v < 1 || v > range.value) return;
+      tries.value++;
+      if (v === answer.value) {
+        won.value = true;
+        const key = `guess_best_${range.value}`;
+        const prev = await dbGet(key);
+        if (!prev || tries.value < prev) {
+          await dbSet(key, tries.value);
+          bestRecord.value = tries.value;
+          isNewRecord.value = true;
+        }
+      } else {
+        const h = v > answer.value ? `${v} 猜大了 ↓` : `${v} 猜小了 ↑`;
+        hint.value = h;
+        guesses.value.push({ val: v, hint: h });
+        inputVal.value = '';
+      }
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+      const b = await dbGet(`guess_best_${range.value}`);
+      if (b) bestRecord.value = b;
+    });
+
+    return { range, started, won, answer, tries, inputVal, hint, guesses, bestRecord, isNewRecord, goBack, startGame, submitGuess };
+  }
+}).mount('#guess-app');
+</script>
+</body>
+</html>

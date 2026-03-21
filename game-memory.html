@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>记忆翻牌</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+<style>
+.memory-grid { display: grid; gap: 8px; margin: 16px 0; }
+.memory-grid-4 { grid-template-columns: repeat(4, 1fr); }
+.memory-grid-6 { grid-template-columns: repeat(6, 1fr); }
+.memory-card { aspect-ratio: 1; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; transition: transform 0.2s; border: 2px solid #e5e5ea; background: #fff; user-select: none; }
+.memory-card.flipped { background: #f0f0f5; border-color: #111; }
+.memory-card.matched { background: #dcfce7; border-color: #27ae60; opacity: 0.7; }
+.memory-card:active { transform: scale(0.94); }
+body.dark .memory-card { background: #2a2a2a; border-color: #444; }
+body.dark .memory-card.flipped { background: #333; border-color: #eee; }
+</style>
+</head>
+<body class="game-page">
+<div id="memory-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">🃏 记忆翻牌</div>
+  </div>
+  <div class="game-body">
+    <div class="game-score-bar">
+      <div class="game-score-item"><div class="game-score-num">{{ moves }}</div><div class="game-score-label">步数</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ matched }}/{{ total }}</div><div class="game-score-label">已配对</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ bestMoves || '-' }}</div><div class="game-score-label">最少步数</div></div>
+    </div>
+
+    <div v-if="!started" style="text-align:center;padding:20px 0;">
+      <div style="font-size:48px;margin-bottom:16px;">🃏</div>
+      <div style="font-size:15px;color:#666;margin-bottom:20px;">翻开所有配对卡片，步数越少越好！</div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-bottom:20px;">
+        <button @click="gridSize=4" :style="gridSize===4?'background:#111;color:#fff;':'background:#f2f2f7;color:#333;'"
+          style="padding:8px 20px;border-radius:20px;border:none;font-size:13px;cursor:pointer;">4×4 简单</button>
+        <button @click="gridSize=6" :style="gridSize===6?'background:#111;color:#fff;':'background:#f2f2f7;color:#333;'"
+          style="padding:8px 20px;border-radius:20px;border:none;font-size:13px;cursor:pointer;">6×6 困难</button>
+      </div>
+      <button class="game-btn game-btn-primary" @click="startGame">开始游戏</button>
+    </div>
+
+    <div v-else-if="!won">
+      <div class="memory-grid" :class="gridSize===4?'memory-grid-4':'memory-grid-6'">
+        <div v-for="card in cards" :key="card.uid"
+          class="memory-card"
+          :class="{flipped: card.flipped, matched: card.matched}"
+          @click="flipCard(card)">
+          <span v-if="card.flipped || card.matched">{{ card.symbol }}</span>
+          <span v-else style="color:#ccc;">?</span>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="game-result-box">
+      <div class="game-result-emoji">🎊</div>
+      <div class="game-result-title">全部配对！</div>
+      <div class="game-result-desc">你用了 {{ moves }} 步完成了游戏！</div>
+      <div v-if="isNewRecord" style="color:#f59e0b;font-weight:700;margin-top:8px;">🏆 新纪录！</div>
+      <div class="game-btn-row">
+        <button class="game-btn game-btn-primary" @click="startGame">再玩一局</button>
+        <button class="game-btn game-btn-secondary" @click="started=false">换难度</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const SYMBOLS_POOL = ['🌸','🍀','⭐','🔮','🎭','💎','🌙','🦋','🎪','🌈','🍭','🎯','🎲','🃏','🎸','🌺','🦊','🐉','🌊','🔥','💫','🍁','🎀','🌙','🦄','🌴','🎵','🍄'];
+    const gridSize = ref(4);
+    const cards = ref([]);
+    const moves = ref(0);
+    const matched = ref(0);
+    const total = ref(0);
+    const won = ref(false);
+    const started = ref(false);
+    const bestMoves = ref(null);
+    const isNewRecord = ref(false);
+    let flippedCards = [];
+    let locked = false;
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const startGame = async () => {
+      const count = gridSize.value === 4 ? 8 : 18;
+      const symbols = SYMBOLS_POOL.slice(0, count);
+      const pairs = [...symbols, ...symbols].sort(() => Math.random() - 0.5);
+      cards.value = pairs.map((s, i) => ({ uid: i, symbol: s, flipped: false, matched: false }));
+      moves.value = 0;
+      matched.value = 0;
+      total.value = count;
+      won.value = false;
+      started.value = true;
+      isNewRecord.value = false;
+      flippedCards = [];
+      locked = false;
+      const key = `memory_best_${gridSize.value}`;
+      const b = await dbGet(key);
+      bestMoves.value = b || null;
+    };
+
+    const flipCard = async (card) => {
+      if (locked || card.flipped || card.matched) return;
+      card.flipped = true;
+      flippedCards.push(card);
+      if (flippedCards.length === 2) {
+        moves.value++;
+        locked = true;
+        const [a, b] = flippedCards;
+        if (a.symbol === b.symbol) {
+          a.matched = true;
+          b.matched = true;
+          matched.value++;
+          flippedCards = [];
+          locked = false;
+          if (matched.value === total.value) {
+            won.value = true;
+            const key = `memory_best_${gridSize.value}`;
+            const prev = await dbGet(key);
+            if (!prev || moves.value < prev) {
+              await dbSet(key, moves.value);
+              bestMoves.value = moves.value;
+              isNewRecord.value = true;
+            }
+          }
+        } else {
+          setTimeout(() => {
+            a.flipped = false;
+            b.flipped = false;
+            flippedCards = [];
+            locked = false;
+          }, 800);
+        }
+      }
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+    });
+
+    return { gridSize, cards, moves, matched, total, won, started, bestMoves, isNewRecord, goBack, startGame, flipCard };
+  }
+}).mount('#memory-app');
+</script>
+</body>
+</html>

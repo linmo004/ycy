@@ -4,6 +4,7 @@ createApp({
   setup() {
     const goBack = () => { window.location.href = 'index.html'; };
     const goForum = () => { window.location.href = 'forum.html'; };
+    const goGames = () => { window.location.href = 'games.html'; };
 
     onMounted(async () => {
       // 加载自定义字体
@@ -27,6 +28,6 @@ createApp({
       lucide.createIcons();
     });
 
-    return { goBack, goForum };
+    return { goBack, goForum, goGames};
   }
 }).mount('#world-app');

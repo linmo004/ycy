@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>次元抽签</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body class="game-page">
+<div id="lottery-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">🎋 次元抽签</div>
+  </div>
+  <div class="game-body" style="text-align:center;">
+    <div style="font-size:64px;margin:20px 0;">🎋</div>
+    <div style="font-size:15px;color:#888;line-height:1.8;margin-bottom:24px;">
+      摇动竹签筒<br/>聆听次元的低语
+    </div>
+
+    <div v-if="!result && !loading">
+      <div style="margin-bottom:20px;">
+        <div style="font-size:13px;color:#aaa;margin-bottom:10px;">签文风格</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
+          <button v-for="s in styles" :key="s.id" @click="selectedStyle=s.id"
+            :style="selectedStyle===s.id?'background:#111;color:#fff;border-color:#111;':''"
+            style="padding:7px 16px;border-radius:20px;border:1.5px solid #e5e5ea;background:#fff;font-size:13px;cursor:pointer;">
+            {{ s.name }}
+          </button>
+        </div>
+      </div>
+      <button class="game-btn game-btn-primary" style="padding:16px 48px;font-size:18px;" @click="draw">
+        🎋 摇签
+      </button>
+    </div>
+
+    <div class="game-loading" v-if="loading"><span></span><span></span><span></span></div>
+
+    <div v-if="result && !loading" style="background:#fff;border-radius:20px;padding:28px 20px;box-shadow:0 2px 16px rgba(0,0,0,0.10);margin-top:10px;">
+      <div style="font-size:40px;margin-bottom:12px;">{{ result.emoji }}</div>
+      <div style="font-size:22px;font-weight:800;color:#111;margin-bottom:4px;">{{ result.level }}</div>
+      <div style="font-size:14px;color:#888;margin-bottom:16px;">{{ result.levelDesc }}</div>
+      <div style="font-size:16px;font-weight:700;color:#333;margin-bottom:12px;padding:12px;background:#f9f9f9;border-radius:12px;line-height:1.8;">{{ result.poem }}</div>
+      <div style="font-size:14px;color:#555;line-height:1.8;margin-bottom:16px;">{{ result.interpretation }}</div>
+      <div style="background:#fffbeb;border-radius:10px;padding:12px;font-size:13px;color:#92400e;">
+        💡 指引：{{ result.advice }}
+      </div>
+      <div class="game-btn-row">
+        <button class="game-btn game-btn-primary" @click="result=null">再抽一签</button>
+      </div>
+    </div>
+
+    <!-- 历史 -->
+    <div v-if="history.length" style="margin-top:20px;">
+      <button class="game-history-btn" @click="showHistory=!showHistory">📜 抽签记录</button>
+      <div v-if="showHistory" class="game-history-list" style="text-align:left;">
+        <div v-for="(h,i) in history.slice().reverse()" :key="i" class="game-history-item">
+          <span>{{ h.emoji }} {{ h.level }}</span>
+          <span style="color:#aaa;font-size:11px;">{{ h.time }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const styles = [
+      { id: 'dimension', name: '次元风' },
+      { id: 'ancient', name: '古风' },
+      { id: 'modern', name: '现代风' },
+      { id: 'cute', name: '可爱风' },
+    ];
+    const selectedStyle = ref('dimension');
+    const result = ref(null);
+    const loading = ref(false);
+    const history = ref([]);
+    const showHistory = ref(false);
+    const apiConfig = ref({});
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const levels = [
+      { level: '大吉', emoji: '🌟', levelDesc: '诸事皆顺，福运绵延', weight: 10 },
+      { level: '吉', emoji: '✨', levelDesc: '运势良好，心想事成', weight: 25 },
+      { level: '中吉', emoji: '🌸', levelDesc: '平稳向好，稳中有进', weight: 30 },
+      { level: '小吉', emoji: '🍀', levelDesc: '小有所获，谨慎为佳', weight: 20 },
+      { level: '末吉', emoji: '🌿', levelDesc: '平淡无奇，守成为要', weight: 10 },
+      { level: '凶', emoji: '⚡', levelDesc: '需多加谨慎，逢凶化吉', weight: 5 },
+    ];
+
+    const pickLevel = () => {
+      const total = levels.reduce((a,b)=>a+b.weight,0);
+      let r = Math.random() * total;
+      for (const l of levels) { r -= l.weight; if (r <= 0) return l; }
+      return levels[0];
+    };
+
+    const draw = async () => {
+      if (!apiConfig.value.url || !apiConfig.value.key || !apiConfig.value.model) {
+        alert('请先在设置里配置API'); return;
+      }
+      loading.value = true;
+      result.value = null;
+      const lv = pickLevel();
+      const styleMap = { dimension:'次元/跨界/命运丝线/星空/次元裂缝风格', ancient:'古典诗词/山水意境风格', modern:'现代都市/网络流行语风格', cute:'可爱/萌系/卖萌风格' };
+      try {
+        const prompt = `请为我生成一支${lv.level}签，风格是${styleMap[selectedStyle.value]}。
+请返回JSON：
+{"poem":"四句签文诗（每句5-7字，押韵，符合${lv.level}的运势）","interpretation":"对签文的解释（80字以内，符合次元世界观）","advice":"一句简短的行动指引（20字以内）"}
+只返回JSON，不要有其他文字。`;
+        const res = await fetch(`${apiConfig.value.url.replace(/\/$/,'')}/chat/completions`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiConfig.value.key}`},
+          body:JSON.stringify({model:apiConfig.value.model,messages:[{role:'user',content:prompt}]})
+        });
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content || '{}';
+        const match = text.match(/\{[\s\S]*\}/);
+        const parsed = match ? JSON.parse(match[0]) : {};
+        result.value = { ...lv, poem: parsed.poem||'签文生成失败', interpretation: parsed.interpretation||'', advice: parsed.advice||'' };
+        history.value.unshift({ emoji: lv.emoji, level: lv.level, time: new Date().toLocaleString() });
+        if (history.value.length > 30) history.value.splice(30);
+        await dbSet('lottery_history', JSON.parse(JSON.stringify(history.value)));
+      } catch(e) {
+        result.value = { ...levels[2], poem:'签文生成失败', interpretation: e.message, advice:'请检查API配置' };
+      }
+      loading.value = false;
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+      const api = await dbGet('apiConfig');
+      if (api) apiConfig.value = api;
+      const h = await dbGet('lottery_history');
+      if (h) history.value = h;
+    });
+
+    return { styles, selectedStyle, result, loading, history, showHistory, goBack, draw };
+  }
+}).mount('#lottery-app');
+</script>
+</body>
+</html>

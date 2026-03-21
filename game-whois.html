@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>猜猜我是谁</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body class="game-page">
+<div id="whois-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">🎭 猜猜我是谁</div>
+  </div>
+  <div class="game-body">
+    <div class="game-score-bar">
+      <div class="game-score-item"><div class="game-score-num">{{ score.correct }}</div><div class="game-score-label">答对</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ score.wrong }}</div><div class="game-score-label">答错</div></div>
+      <div class="game-score-item"><div class="game-score-num">{{ score.streak }}</div><div class="game-score-label">连对</div></div>
+    </div>
+
+    <div v-if="charList.length < 2" style="text-align:center;padding:40px 20px;">
+      <div style="font-size:40px;margin-bottom:12px;">😅</div>
+      <div style="font-size:14px;color:#888;">需要至少2个连接的角色才能游玩<br/>请先在聊天页面连接更多角色</div>
+    </div>
+
+    <div v-else-if="!currentQuestion && !loading" style="text-align:center;padding:20px 0;">
+      <div style="font-size:48px;margin-bottom:16px;">🎭</div>
+      <div style="font-size:15px;color:#666;margin-bottom:8px;">AI会给出一段角色描述</div>
+      <div style="font-size:13px;color:#aaa;margin-bottom:24px;">你来猜是哪个角色！</div>
+      <button class="game-btn game-btn-primary" @click="nextQuestion">开始游戏</button>
+    </div>
+
+    <div class="game-loading" v-if="loading"><span></span><span></span><span></span></div>
+
+    <div v-if="currentQuestion && !loading">
+      <div style="background:#fff;border-radius:16px;padding:20px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:700;color:#aaa;margin-bottom:10px;letter-spacing:0.5px;">🎭 这个人是谁？</div>
+        <div style="font-size:15px;color:#333;line-height:1.8;">{{ currentQuestion.hint }}</div>
+      </div>
+
+      <div v-if="!answered">
+        <div style="font-size:13px;color:#aaa;margin-bottom:10px;">选择你的答案：</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button v-for="opt in currentQuestion.options" :key="opt.id"
+            @click="answer(opt)"
+            style="padding:14px 16px;border-radius:12px;border:1.5px solid #e5e5ea;background:#fff;font-size:14px;font-weight:600;text-align:left;cursor:pointer;transition:all 0.15s;">
+            {{ opt.name }}
+          </button>
+        </div>
+      </div>
+
+      <div v-else class="game-result-box">
+        <div class="game-result-emoji">{{ answerResult==='correct'?'🎉':'😅' }}</div>
+        <div class="game-result-title" :style="answerResult==='correct'?'color:#27ae60':'color:#e53e3e'">
+          {{ answerResult==='correct'?'答对了！':'答错了...' }}
+        </div>
+        <div class="game-result-desc">正确答案是：<strong>{{ currentQuestion.answer.name }}</strong></div>
+        <div class="game-btn-row">
+          <button class="game-btn game-btn-primary" @click="nextQuestion">下一题</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const charList = ref([]);
+    const score = ref({ correct: 0, wrong: 0, streak: 0 });
+    const currentQuestion = ref(null);
+    const answered = ref(false);
+    const answerResult = ref('');
+    const loading = ref(false);
+    const apiConfig = ref({});
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const nextQuestion = async () => {
+      if (!apiConfig.value.url || !apiConfig.value.key || !apiConfig.value.model) {
+        alert('请先配置API'); return;
+      }
+      loading.value = true;
+      answered.value = false;
+      answerResult.value = '';
+      currentQuestion.value = null;
+
+      // 随机选一个角色作为答案
+      const shuffled = [...charList.value].sort(() => Math.random() - 0.5);
+      const answer = shuffled[0];
+      // 随机3个干扰选项
+      const distractors = shuffled.slice(1, 4);
+      const options = [...distractors, answer].sort(() => Math.random() - 0.5);
+
+      try {
+        const prompt = `请根据以下角色的人设，生成一段猜谜描述（不能直接说出角色名字，80-120字，描述性格特点、口头禅、习惯、爱好等，让人能猜出是谁）：
+角色名：${answer.name}
+人设：${answer.persona || '无具体人设'}
+世界观：${answer.world || '无'}
+注意：绝对不能出现角色名字，用"这个人"代替。只输出描述文字，不要有其他内容。`;
+        const res = await fetch(`${apiConfig.value.url.replace(/\/$/,'')}/chat/completions`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiConfig.value.key}`},
+          body:JSON.stringify({model:apiConfig.value.model,messages:[{role:'user',content:prompt}]})
+        });
+        const data = await res.json();
+        const hint = data.choices?.[0]?.message?.content || '描述生成失败';
+        currentQuestion.value = { hint, answer, options };
+      } catch(e) {
+        currentQuestion.value = { hint: '描述生成失败：'+e.message, answer, options };
+      }
+      loading.value = false;
+    };
+
+    const answer = async (opt) => {
+      answered.value = true;
+      if (opt.id === currentQuestion.value.answer.id) {
+        answerResult.value = 'correct';
+        score.value.correct++;
+        score.value.streak++;
+      } else {
+        answerResult.value = 'wrong';
+        score.value.wrong++;
+        score.value.streak = 0;
+      }
+      await dbSet('whois_score', JSON.parse(JSON.stringify(score.value)));
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+      const api = await dbGet('apiConfig');
+      if (api) apiConfig.value = api;
+      const chars = await dbGet('charList') || [];
+      charList.value = chars;
+      const s = await dbGet('whois_score');
+      if (s) score.value = s;
+    });
+
+    return { charList, score, currentQuestion, answered, answerResult, loading, goBack, nextQuestion, answer };
+  }
+}).mount('#whois-app');
+</script>
+</body>
+</html>

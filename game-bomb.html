@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>数字炸弹</title>
+<script src="vue.global.js"></script>
+<link rel="stylesheet" href="games.css" />
+</head>
+<body class="game-page">
+<div id="bomb-app" v-cloak>
+  <div class="game-topbar">
+    <button class="game-topbar-back" @click="goBack">←</button>
+    <div class="game-topbar-title">💣 数字炸弹</div>
+  </div>
+  <div class="game-body">
+    <div v-if="!started" style="text-align:center;padding:20px 0;">
+      <div style="font-size:48px;margin-bottom:16px;">💣</div>
+      <div style="font-size:15px;color:#666;line-height:1.8;margin-bottom:20px;">
+        范围 1-{{ maxNum }} 内藏着一颗炸弹<br/>
+        玩家轮流报数，每次报 1~{{ step }} 个连续数字<br/>
+        报到炸弹的人输！
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:12px;">
+        <span style="font-size:13px;color:#555;">范围：</span>
+        <button v-for="m in [50,100,200]" :key="m" @click="maxNum=m"
+          :style="maxNum===m?'background:#111;color:#fff;':'background:#f2f2f7;color:#333;'"
+          style="padding:6px 14px;border-radius:20px;border:none;font-size:13px;cursor:pointer;">1-{{ m }}</button>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:20px;">
+        <span style="font-size:13px;color:#555;">每次最多：</span>
+        <button v-for="s in [3,5,10]" :key="s" @click="step=s"
+          :style="step===s?'background:#111;color:#fff;':'background:#f2f2f7;color:#333;'"
+          style="padding:6px 14px;border-radius:20px;border:none;font-size:13px;cursor:pointer;">{{ s }}个</button>
+      </div>
+      <button class="game-btn game-btn-primary" @click="startGame">开始游戏</button>
+    </div>
+
+    <div v-else-if="!gameOver">
+      <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:14px;text-align:center;">
+        <div style="font-size:13px;color:#aaa;">炸弹藏在 {{ currentMin }} ~ {{ maxNum }} 之间</div>
+        <div style="font-size:32px;font-weight:800;color:#111;margin:8px 0;">已报到 {{ lastNum }}</div>
+        <div style="font-size:13px;color:#555;">每次可报 1~{{ step }} 个数字</div>
+      </div>
+
+      <div style="background:#fff;border-radius:16px;padding:16px;margin-bottom:14px;">
+        <div style="font-size:13px;color:#aaa;margin-bottom:10px;">{{ currentTurn===0?'👤 你的回合':'🤖 AI的回合' }}</div>
+        <div v-if="currentTurn===0">
+          <div style="font-size:13px;color:#555;margin-bottom:8px;">报几个数字？（1-{{ step }}个，从 {{ lastNum+1 }} 开始）</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button v-for="n in step" :key="n" @click="playerReport(n)"
+              :disabled="lastNum+n > maxNum"
+              style="padding:10px 18px;border-radius:10px;border:1.5px solid #e5e5ea;background:#fff;font-size:15px;font-weight:700;cursor:pointer;"
+              :style="lastNum+n > maxNum?'opacity:0.3;cursor:not-allowed;':''">
+              报{{ n }}个
+            </button>
+          </div>
+        </div>
+        <div v-else style="text-align:center;padding:10px 0;color:#aaa;font-size:14px;">AI思考中...</div>
+      </div>
+
+      <div style="background:#fff;border-radius:16px;padding:14px;max-height:180px;overflow-y:auto;">
+        <div style="font-size:12px;color:#aaa;margin-bottom:6px;">报数记录</div>
+        <div v-for="(r,i) in history.slice().reverse()" :key="i" style="font-size:13px;color:#555;padding:4px 0;border-bottom:1px solid #f5f5f5;">
+          {{ r }}
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="game-result-box">
+      <div class="game-result-emoji">{{ loser===0?'💥':'🎉' }}</div>
+      <div class="game-result-title">{{ loser===0?'你踩到炸弹了！':'AI踩到炸弹了！' }}</div>
+      <div class="game-result-desc">炸弹藏在数字 {{ bombNum }} 处<br/>{{ loser===0?'下次小心点～':'你赢了！真厉害！' }}</div>
+      <div class="game-btn-row">
+        <button class="game-btn game-btn-primary" @click="startGame">再来一局</button>
+        <button class="game-btn game-btn-secondary" @click="started=false">换设置</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="db.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  setup() {
+    const maxNum = ref(100);
+    const step = ref(5);
+    const started = ref(false);
+    const gameOver = ref(false);
+    const bombNum = ref(0);
+    const lastNum = ref(0);
+    const currentMin = ref(1);
+    const currentTurn = ref(0);
+    const history = ref([]);
+    const loser = ref(-1);
+
+    const goBack = () => { window.location.href = 'games.html'; };
+
+    const startGame = () => {
+      bombNum.value = Math.floor(Math.random() * maxNum.value) + 1;
+      lastNum.value = 0;
+      currentMin.value = 1;
+      history.value = [];
+      gameOver.value = false;
+      loser.value = -1;
+      currentTurn.value = 0;
+      started.value = true;
+    };
+
+    const checkBomb = (num, who) => {
+      if (num >= bombNum.value) {
+        loser.value = who;
+        gameOver.value = true;
+        return true;
+      }
+      return false;
+    };
+
+    const playerReport = (count) => {
+      const end = lastNum.value + count;
+      const nums = [];
+      for (let i = lastNum.value + 1; i <= end; i++) nums.push(i);
+      history.value.push(`👤 你报了：${nums.join('、')}`);
+      if (checkBomb(end, 0)) return;
+      lastNum.value = end;
+      currentMin.value = end + 1;
+      currentTurn.value = 1;
+      setTimeout(aiReport, 800);
+    };
+
+    const aiReport = () => {
+      // AI策略：尽量让对手踩到炸弹
+      const remaining = maxNum.value - lastNum.value;
+      const cycle = step.value + 1;
+      let count = ((remaining - 1) % cycle) || 1;
+      if (count < 1) count = 1;
+      if (count > step.value) count = step.value;
+      const end = lastNum.value + count;
+      const nums = [];
+      for (let i = lastNum.value + 1; i <= end; i++) nums.push(i);
+      history.value.push(`🤖 AI报了：${nums.join('、')}`);
+      if (checkBomb(end, 1)) return;
+      lastNum.value = end;
+      currentMin.value = end + 1;
+      currentTurn.value = 0;
+    };
+
+    onMounted(async () => {
+      const dark = await dbGet('darkMode');
+      if (dark) document.body.classList.add('dark');
+    });
+
+    return { maxNum, step, started, gameOver, bombNum, lastNum, currentMin, currentTurn, history, loser, goBack, startGame, playerReport };
+  }
+}).mount('#bomb-app');
+</script>
+</body>
+</html>
